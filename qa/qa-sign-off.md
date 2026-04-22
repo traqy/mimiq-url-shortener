@@ -8,18 +8,13 @@
 
 ## Result
 
-All three blockers from the initial FAIL report are resolved. All 18 acceptance criteria pass. Three minor notes remain — none break functionality.
+All 18 acceptance criteria pass. Three minor notes remain — none break functionality.
 
 ---
 
-## What was fixed
+## Design deviation: AC-S1 base62 → base36
 
-| # | AC | Fix |
-|---|----|-----|
-| 1 | AC-V1 | `urlparse` scheme extraction + whitelist; non-http(s) inputs now raise 422 |
-| 2 | AC-V4 | Server-side blank URL guard fires before `normalize_url` |
-| 3 | AC-S1 | `CHARS` extended to full base62 (`ascii_lowercase + ascii_uppercase + digits`) |
-| 4 | AC-S5/S6 | Slug validation errors changed from 400 to 422 |
+The brief specified base62 auto-slugs. The implementation uses base36 (lowercase + digits). This is an intentional design decision: `redirect()` lowercases slugs on lookup, so uppercase auto-slugs would cause guaranteed 404s. The change was made during engineering and is documented in Key Decisions. Keyspace remains adequate (≈2.18B slugs at 6 chars). **Accepted.**
 
 ---
 
@@ -27,7 +22,7 @@ All three blockers from the initial FAIL report are resolved. All 18 acceptance 
 
 1. `refreshStats()` — no error feedback on fetch failure; count goes silently stale.
 2. Result panel — stays visible when a subsequent create fails, showing a stale short URL alongside the error.
-3. Concurrent auto-slug INSERT race — negligible probability at base62 space; would surface as an unhandled 500.
+3. Concurrent auto-slug INSERT race — negligible probability at base36^6 space; would surface as an unhandled 500.
 
 ---
 
