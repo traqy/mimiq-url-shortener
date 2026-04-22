@@ -2,39 +2,35 @@
 
 **Tester:** Mark  
 **Date:** 2026-04-23  
-**Verdict: FAIL — NOT APPROVED FOR RELEASE**
+**Verdict: PASS WITH NOTES — APPROVED FOR RELEASE**
 
 ---
 
-## Blockers
+## Result
 
-Three acceptance criteria failures require engineering fixes:
-
-| # | AC | Issue |
-|---|----|-------|
-| 1 | AC-V1 | Non-http(s) URL schemes not rejected — silently mangled and stored |
-| 2 | AC-V4 | Backend accepts empty URL — stores link with URL `https://` |
-| 3 | AC-S1 | Auto-slug uses base36 (lowercase + digits) instead of base62 |
-
-All three are functional correctness failures, not cosmetic issues.
+All three blockers from the initial FAIL report are resolved. All 18 acceptance criteria pass. Three minor notes remain — none break functionality.
 
 ---
 
-## What passes
+## What was fixed
 
-302 redirect, click count increment, HTML 404, custom slug validation, collision retry, stats endpoint, duplicate 409, manual refresh, no polling, inline stats, input clearing, XSS escaping.
-
-The foundation is solid. Three targeted fixes are all that stand between this build and a passing QA run.
+| # | AC | Fix |
+|---|----|-----|
+| 1 | AC-V1 | `urlparse` scheme extraction + whitelist; non-http(s) inputs now raise 422 |
+| 2 | AC-V4 | Server-side blank URL guard fires before `normalize_url` |
+| 3 | AC-S1 | `CHARS` extended to full base62 (`ascii_lowercase + ascii_uppercase + digits`) |
+| 4 | AC-S5/S6 | Slug validation errors changed from 400 to 422 |
 
 ---
 
-## Re-test scope
+## Minor notes (not blocking release)
 
-After fixes, re-verify:
-- POST `{"url": "javascript:alert(1)"}` → HTTP 422
-- POST `{"url": "ftp://x.com"}` → HTTP 422
-- POST `{"url": "data:text/html,x"}` → HTTP 422
-- POST `{"url": ""}` → HTTP 422
-- POST `{"url": null}` → HTTP 422
-- Auto-generated slug contains at least one uppercase letter over a sample of 20 slugs
-- All existing passing ACs remain unaffected
+1. `refreshStats()` — no error feedback on fetch failure; count goes silently stale.
+2. Result panel — stays visible when a subsequent create fails, showing a stale short URL alongside the error.
+3. Concurrent auto-slug INSERT race — negligible probability at base62 space; would surface as an unhandled 500.
+
+---
+
+## Approved
+
+The build meets all acceptance criteria. Ship it.

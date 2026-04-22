@@ -4,6 +4,7 @@ import sqlite3
 import string
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 
 DB = Path(__file__).parent / "links.db"
 STATIC = Path(__file__).parent / "static"
-CHARS = string.ascii_lowercase + string.digits
+CHARS = string.ascii_lowercase + string.ascii_uppercase + string.digits
 RESERVED = {"api", "stats", "docs", "redoc", "openapi.json", "favicon.ico", "health"}
 
 
@@ -53,7 +54,11 @@ class CreateReq(BaseModel):
 
 def normalize_url(url: str) -> str:
     url = url.strip()
-    if not url.startswith(("http://", "https://")):
+    parsed = urlparse(url)
+    if parsed.scheme:
+        if parsed.scheme.lower() not in ("http", "https"):
+            raise HTTPException(422, f"URL scheme '{parsed.scheme}' is not allowed — use http or https")
+    else:
         url = "https://" + url
     return url
 
@@ -74,16 +79,18 @@ def health():
 
 @app.post("/api/links", status_code=201)
 def create_link(req: CreateReq):
+    if not req.url.strip():
+        raise HTTPException(422, "URL must not be blank")
     url = normalize_url(req.url)
 
     if req.slug:
         slug = req.slug.strip().lower()
         if len(slug) < 3 or len(slug) > 50:
-            raise HTTPException(400, "Slug must be 3–50 characters")
+            raise HTTPException(422, "Slug must be 3–50 characters")
         if slug in RESERVED:
-            raise HTTPException(400, f"'{slug}' is a reserved path")
+            raise HTTPException(422, f"'{slug}' is a reserved path")
         if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", slug):
-            raise HTTPException(400, "Slug: alphanumeric + hyphens, no leading/trailing hyphens")
+            raise HTTPException(422, "Slug: alphanumeric + hyphens, no leading/trailing hyphens")
         with get_db() as conn:
             if conn.execute("SELECT 1 FROM links WHERE slug=?", (slug,)).fetchone():
                 raise HTTPException(409, f"'{slug}' is already taken")
