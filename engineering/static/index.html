@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Short Link</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#f9fafb;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:60px 16px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,.08);padding:36px;width:100%;max-width:520px}
+h1{font-size:1.6rem;color:#111;margin-bottom:4px}
+.sub{color:#6b7280;font-size:.9rem;margin-bottom:28px}
+label{display:block;font-size:.875rem;font-weight:500;color:#374151;margin-bottom:6px}
+input[type=text]{width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:1rem;outline:none;transition:border .15s,box-shadow .15s}
+input[type=text]:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+.row{margin-bottom:16px}
+.hint{font-size:.78rem;color:#9ca3af;margin-top:5px}
+button.primary{width:100%;padding:11px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;transition:background .15s}
+button.primary:hover{background:#4f46e5}
+button.primary:disabled{background:#a5b4fc;cursor:not-allowed}
+.result{margin-top:24px;padding:20px;background:#f0f0fe;border-radius:8px;display:none}
+.result.show{display:block}
+.short-url{font-size:1.1rem;font-weight:600;color:#4f46e5;word-break:break-all}
+.short-url a{color:inherit;text-decoration:none}
+.short-url a:hover{text-decoration:underline}
+.dest{margin-top:6px;font-size:.85rem;color:#6b7280;word-break:break-all}
+.stats-row{display:flex;align-items:center;gap:8px;margin-top:14px}
+.clicks{font-size:1.6rem;font-weight:700;color:#111}
+.clicks-label{font-size:.85rem;color:#6b7280}
+.refresh-btn{margin-left:auto;padding:5px 12px;background:none;border:1px solid #d1d5db;border-radius:6px;font-size:.8rem;color:#374151;font-weight:500;cursor:pointer}
+.refresh-btn:hover{background:#f3f4f6}
+.error{margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:.875rem;display:none}
+.error.show{display:block}
+.divider{margin:28px 0;border:none;border-top:1px solid #e5e7eb}
+.lookup-title{font-size:.95rem;font-weight:600;color:#374151;margin-bottom:12px}
+.lookup-row{display:flex;gap:8px}
+.lookup-row input{flex:1}
+.lookup-btn{padding:10px 18px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.lookup-btn:hover{background:#e5e7eb}
+.lookup-result{margin-top:12px;font-size:.875rem;color:#374151;line-height:1.6;display:none}
+.lookup-result.show{display:block}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Short Link</h1>
+  <p class="sub">Paste a long URL. Get a short one.</p>
+
+  <div class="row">
+    <label for="url">URL</label>
+    <input type="text" id="url" placeholder="https://example.com/very/long/path" autocomplete="off">
+  </div>
+  <div class="row">
+    <label for="slug">Custom slug <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+    <input type="text" id="slug" placeholder="my-link" autocomplete="off">
+    <p class="hint">3–50 chars, letters/numbers/hyphens. Leave blank to auto-generate.</p>
+  </div>
+  <button class="primary" id="createBtn" onclick="createLink()">Shorten</button>
+
+  <div class="error" id="error"></div>
+
+  <div class="result" id="result">
+    <div class="short-url"><a id="shortLink" href="#" target="_blank"></a></div>
+    <div class="dest">→ <span id="destUrl"></span></div>
+    <div class="stats-row">
+      <span class="clicks" id="clickCount">0</span>
+      <span class="clicks-label">clicks</span>
+      <button class="refresh-btn" onclick="refreshStats()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <p class="lookup-title">Check stats for an existing link</p>
+  <div class="lookup-row">
+    <input type="text" id="lookupSlug" placeholder="slug" autocomplete="off">
+    <button class="lookup-btn" onclick="lookupStats()">Stats</button>
+  </div>
+  <div class="lookup-result" id="lookupResult"></div>
+</div>
+
+<script>
+let currentSlug = null;
+
+async function createLink() {
+  const urlEl = document.getElementById('url');
+  const slugEl = document.getElementById('slug');
+  const btn = document.getElementById('createBtn');
+  const errEl = document.getElementById('error');
+  const resultEl = document.getElementById('result');
+
+  const url = urlEl.value.trim();
+  const slug = slugEl.value.trim() || null;
+  if (!url) { showError('Please enter a URL.'); return; }
+
+  errEl.classList.remove('show');
+  btn.disabled = true;
+  btn.textContent = 'Shortening…';
+
+  try {
+    const res = await fetch('/api/links', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, slug})
+    });
+    const data = await res.json();
+    if (!res.ok) { showError(data.detail || 'Something went wrong.'); return; }
+
+    currentSlug = data.slug;
+    const short = location.origin + '/' + data.slug;
+    document.getElementById('shortLink').href = short;
+    document.getElementById('shortLink').textContent = short;
+    document.getElementById('destUrl').textContent = data.url;
+    document.getElementById('clickCount').textContent = data.click_count;
+    resultEl.classList.add('show');
+    urlEl.value = '';
+    slugEl.value = '';
+  } catch (e) {
+    showError('Request failed. Is the server running?');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Shorten';
+  }
+}
+
+async function refreshStats() {
+  if (!currentSlug) return;
+  const res = await fetch(`/api/links/${currentSlug}/stats`);
+  if (res.ok) {
+    const data = await res.json();
+    document.getElementById('clickCount').textContent = data.click_count;
+  }
+}
+
+async function lookupStats() {
+  const slug = document.getElementById('lookupSlug').value.trim();
+  const el = document.getElementById('lookupResult');
+  if (!slug) return;
+  el.classList.remove('show');
+  const res = await fetch(`/api/links/${slug}/stats`);
+  const data = await res.json();
+  if (!res.ok) {
+    el.innerHTML = `<span style="color:#b91c1c">${esc(data.detail || 'Not found')}</span>`;
+  } else {
+    const short = location.origin + '/' + data.slug;
+    el.innerHTML = `<strong><a href="${short}" target="_blank">${short}</a></strong><br>
+→ ${esc(data.url)}<br><strong>${data.click_count}</strong> clicks &middot; created ${data.created_at.replace('T',' ')} UTC`;
+  }
+  el.classList.add('show');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+['url','slug'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => { if (e.key==='Enter') createLink(); });
+});
+document.getElementById('lookupSlug').addEventListener('keydown', e => { if (e.key==='Enter') lookupStats(); });
+</script>
+</body>
+</html>
