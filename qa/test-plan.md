@@ -18,6 +18,7 @@
 ### 2. Auto-slug Generation (AC-S1, AC-S2)
 - S1: 6-char, base62 charset [a-zA-Z0-9]
 - S2: Up to 5 candidates on collision; 503 on exhaustion
+- **S1-edge: auto-slug case-roundtrip** — slug stored and retrieved consistently
 
 ### 3. Custom Slug Validation (AC-S3 through AC-S8)
 - S3: Normalised to lowercase
@@ -31,6 +32,7 @@
 - R1: Valid slug returns 302 (not 301)
 - R2: Click count increments on every visit ← **primary bug under test**
 - R3: Unknown slug returns HTML 404 (not JSON)
+- **R-edge: case sensitivity** — redirect slug lookup consistent with stored slug
 
 ### 5. Stats (AC-T1 through AC-T3)
 - T1: Click count shown inline after creation

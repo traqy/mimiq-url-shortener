@@ -2,43 +2,38 @@
 
 **Tester:** Mark  
 **Date:** 2026-04-24  
-**Verdict: PASS WITH NOTES — APPROVED FOR RELEASE**
+**Verdict: FAIL — NOT APPROVED FOR RELEASE**
 
 ---
 
 ## Bug fix verification
 
-Issue #1: click counter decrementing on each redirect.
-
-Fix confirmed at `engineering/main.py:137`:
-```python
-conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
-```
-
-`+1` is in place. The bug is gone.
+Issue #1 (click counter decrementing): **Fixed.** `click_count+1` confirmed at `engineering/main.py:137`.
 
 ---
 
-## Result
+## Blocker found during QA
 
-All 18 acceptance criteria pass. Three minor notes remain — none break functionality.
+**Auto-slug uppercase roundtrip failure.**
 
----
+The engineer changed `CHARS` to base62 to match AC-S1, but `gen_slug()` produces mixed-case slugs that are stored verbatim. Both `redirect()` and `get_stats()` lowercase the slug before DB lookup. Any auto-generated slug containing an uppercase letter is permanently unreachable — redirect returns 404, stats returns 404. Approximately 66% of auto-slugs are broken on creation.
 
-## Design deviation: AC-S1 base62 → base36
-
-The brief specified base62 auto-slugs. The implementation uses base36 (lowercase + digits). This is an intentional design decision: `redirect()` lowercases slugs on lookup, so uppercase auto-slugs would cause guaranteed 404s. The change is documented in Key Decisions. Keyspace remains adequate (≈2.18B slugs at 6 chars). **Accepted.**
+The original bug is fixed but this regression is introduced in the same change.
 
 ---
 
-## Minor notes (not blocking release)
+## Required before re-approval
 
-1. `refreshStats()` — no error feedback on fetch failure; count goes silently stale.
-2. Result panel — stays visible when a subsequent create fails, showing a stale short URL alongside the error.
-3. Concurrent auto-slug INSERT race — negligible probability at base36^6 space; would surface as an unhandled 500.
+Either:
+- Add `.lower()` to `gen_slug()` return value, **or**
+- Restrict `CHARS` to `string.ascii_lowercase + string.digits`
+
+Then re-run QA.
 
 ---
 
-## Approved
+## Minor notes (not blocking re-approval)
 
-The build meets all acceptance criteria. The off-by-sign bug is fixed. Ship it.
+1. `refreshStats()` — no error feedback on fetch failure.
+2. Result panel stays visible on subsequent create failure.
+3. Concurrent auto-slug INSERT race — negligible probability.
