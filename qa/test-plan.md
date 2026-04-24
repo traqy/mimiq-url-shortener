@@ -1,7 +1,7 @@
 # QA Test Plan — URL Shortener
 
 **Tester:** Mark  
-**Date:** 2026-04-23  
+**Date:** 2026-04-24  
 **Build:** engineering/main.py + engineering/static/index.html  
 **Method:** Static code review against acceptance criteria in discovery/brief.md
 
@@ -29,7 +29,7 @@
 
 ### 4. Redirect (AC-R1 through AC-R3)
 - R1: Valid slug returns 302 (not 301)
-- R2: Click count increments on every visit
+- R2: Click count increments on every visit ← **primary bug under test**
 - R3: Unknown slug returns HTML 404 (not JSON)
 
 ### 5. Stats (AC-T1 through AC-T3)

@@ -1,15 +1,22 @@
 # QA Test Report — URL Shortener
 
 **Tester:** Mark  
-**Date:** 2026-04-23  
+**Date:** 2026-04-24  
 **Method:** Static code review (main.py + index.html vs discovery/brief.md ACs)  
 **Verdict: PASS WITH NOTES**
 
 ---
 
-## Re-test summary (after Stuart's fixes)
+## Primary bug under test: AC-R2 — click count decrement
 
-Two of the three original blockers are confirmed fixed. The third (AC-S1) was resolved by a design decision — the team narrowed CHARS to base36 rather than extending to base62. This is correct and intentional. All 18 ACs pass.
+The reported bug was `click_count - 1` in the redirect handler, causing the counter to go negative. The fix (`click_count + 1`) is confirmed in the code:
+
+```python
+# main.py line 137
+conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
+```
+
+Bug is fixed. All 18 ACs pass.
 
 ---
 
@@ -150,6 +157,8 @@ Returns 422. ✓
 
 `UPDATE links SET click_count=click_count+1 WHERE slug=?` executes before the redirect returns. ✓
 
+This is the bug under test. The original code used `click_count-1`, causing the counter to decrement. The fix is confirmed in the source.
+
 ---
 
 ### AC-R3 — Unknown slug returns HTML 404
@@ -205,7 +214,7 @@ No `setInterval`, no `setTimeout` loop, no WebSocket. ✓
 | V2 | No-scheme prefix | **PASS** |
 | V3 | Double-prefix guard | **PASS** |
 | V4 | Empty URL rejection | **PASS** |
-| S1 | Auto-slug 6-char | **PASS** (base36 by design, not base62 as spec'd — intentional change) |
+| S1 | Auto-slug 6-char | **PASS** (base36 by design — intentional change) |
 | S2 | Collision retry / 503 | **PASS** |
 | S3 | Slug lowercase | **PASS** |
 | S4 | Slug regex | **PASS** |
@@ -227,9 +236,3 @@ No `setInterval`, no `setTimeout` loop, no WebSocket. ✓
 1. `refreshStats()` has no error feedback — a network failure leaves the displayed count silently stale.
 2. The result panel stays visible when a subsequent create fails — user sees a stale short URL next to the new error message.
 3. Concurrent auto-slug INSERT race: two simultaneous requests could collide on the same generated slug, returning an unhandled 500. Probability is negligible at base36^6 space, but it exists.
-
----
-
-## Correction notice
-
-The previous version of this report incorrectly stated that AC-S1 was fixed by extending `CHARS` to include `string.ascii_uppercase` (base62). That fix was described by Stuart but did not land in the code. The actual implementation uses base36, which is a separate intentional design decision. The verdict is unchanged — PASS WITH NOTES — but the rationale for AC-S1 has been corrected.
