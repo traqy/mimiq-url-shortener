@@ -134,7 +134,7 @@ def redirect(slug: str):
         row = conn.execute("SELECT url FROM links WHERE slug=?", (slug,)).fetchone()
         if not row:
             return HTMLResponse(_404_html(slug), status_code=404)
-        conn.execute("UPDATE links SET click_count=click_count-1 WHERE slug=?", (slug,))
+        conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
     return RedirectResponse(row["url"], status_code=302)
 
 
