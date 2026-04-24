@@ -2,6 +2,7 @@
 
 **Tester:** Mark  
 **Date:** 2026-04-24  
+**Round:** 2 (re-test after engineering round 2)
 **Build:** engineering/main.py + engineering/static/index.html  
 **Method:** Static code review against acceptance criteria in discovery/brief.md
 
@@ -18,21 +19,20 @@
 ### 2. Auto-slug Generation (AC-S1, AC-S2)
 - S1: 6-char, base62 charset [a-zA-Z0-9]
 - S2: Up to 5 candidates on collision; 503 on exhaustion
-- **S1-edge: auto-slug case-roundtrip** — slug stored and retrieved consistently
+- **S1-edge: auto-slug case roundtrip** — slug stored and retrieved consistently (primary failure from round 1)
 
 ### 3. Custom Slug Validation (AC-S3 through AC-S8)
 - S3: Normalised to lowercase
-- S4: Regex pattern — alphanumeric + internal hyphens, single-char allowed
+- S4: Regex pattern — alphanumeric + internal hyphens
 - S5: Leading/trailing hyphens rejected
 - S6: Length 3–50 chars
 - S7: Duplicate slug → 409
-- S8: Reserved paths rejected (api, stats, docs, redoc, openapi.json, favicon.ico, health)
+- S8: Reserved paths rejected
 
 ### 4. Redirect (AC-R1 through AC-R3)
 - R1: Valid slug returns 302 (not 301)
-- R2: Click count increments on every visit ← **primary bug under test**
+- R2: Click count increments on every visit ← **primary bug under fix**
 - R3: Unknown slug returns HTML 404 (not JSON)
-- **R-edge: case sensitivity** — redirect slug lookup consistent with stored slug
 
 ### 5. Stats (AC-T1 through AC-T3)
 - T1: Click count shown inline after creation
@@ -40,6 +40,7 @@
 - T3: No automatic polling
 
 ### 6. Frontend UX
+- Relative API paths (no leading slash)
 - Input cleared after successful creation
 - Error shown on failed create
 - Lookup panel works independently

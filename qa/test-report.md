@@ -2,6 +2,7 @@
 
 **Tester:** Mark  
 **Date:** 2026-04-24  
+**Round:** 2 (re-test after engineering round 2)  
 **Method:** Static code review (main.py + index.html vs discovery/brief.md ACs)  
 **Verdict: FAIL**
 
@@ -15,64 +16,58 @@ Fix confirmed at `engineering/main.py:137`:
 conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
 ```
 
-`+1` is in place. Original bug is gone. ✓
+`+1` is in place. Original bug is resolved. ✓
 
 ---
 
-## BLOCKER: AC-S1 / AC-R2 — Auto-slug uppercase roundtrip failure
+## BLOCKER: AC-S1 — Auto-slug uppercase roundtrip failure (NOT FIXED)
 
 **Severity: FAIL — blocks release.**
 
-The engineer changed `CHARS` to base62 to match the spec:
+The decision log states: *"Reverted CHARS from base62 to base36 (lowercase + digits)"*. This change was **not applied**. The file still reads:
 
 ```python
 # main.py line 16
 CHARS = string.ascii_lowercase + string.ascii_uppercase + string.digits  # base62
 ```
 
-However, `gen_slug()` returns slugs with original casing and the `create_link` path stores them as-is — no `.lower()` on auto-generated slugs:
-
-```python
-def gen_slug() -> str:
-    return "".join(random.choices(CHARS, k=6))  # may return e.g. "aBcDeF"
-
-# stored verbatim:
-conn.execute("INSERT INTO links (slug, url) VALUES (?,?)", (slug, url))
-```
-
-But `redirect()` lowercases before lookup:
+`gen_slug()` produces mixed-case slugs stored verbatim in the DB. Both `redirect()` and `get_stats()` lowercase the slug before lookup:
 
 ```python
 def redirect(slug: str):
-    slug = slug.lower()  # "aBcDeF" → "abcdef"
+    slug = slug.lower()           # "aBcDeF" → "abcdef"
     row = conn.execute("SELECT url FROM links WHERE slug=?", (slug,)).fetchone()
-    # looks up "abcdef"; stored key is "aBcDeF" — NOT FOUND → 404
+    # stored key is "aBcDeF" — NOT FOUND → 404
 ```
 
-`get_stats()` has the same problem (`slug.lower()` at line 118).
+`get_stats()` has the identical problem (`slug.lower()` at line 119).
 
-**Reproduces:** Create a link without a custom slug. If the auto-generated slug contains any uppercase letter (base62 → ~66% chance on first char), every subsequent redirect and stats lookup returns 404/not-found. The create response shows the correct slug and click count of 0, but the link is permanently broken.
+**Impact:** Any auto-generated slug containing one or more uppercase letters is permanently unreachable. Both redirect and stats return 404. Statistically ~66% of auto-slugs fail on first access.
 
-**Fix:** Either lowercase the generated slug before insert in `gen_slug()` or `create_link()`, or restrict `CHARS` back to `string.ascii_lowercase + string.digits`.
+**Required fix — one of:**
+```python
+# Option A: lowercase the output of gen_slug()
+def gen_slug() -> str:
+    return "".join(random.choices(CHARS, k=6)).lower()
+
+# Option B: restrict charset to lowercase
+CHARS = string.ascii_lowercase + string.digits  # base36
+```
+
+Note: Option B produces base36 slugs, which technically violates AC-S1's spec of base62 `[a-zA-Z0-9]`. However, AC-S1 and the custom slug validation regex (`[a-z0-9-]`) are in direct conflict — the custom slug path never allows uppercase. This is a spec issue, not an engineering issue; either fix resolves the live failure.
 
 ---
 
 ## 1. URL Validation
 
 ### AC-V1 — Non-http(s) schemes rejected with 422
-**PASS**
-
-`normalize_url` checks scheme via `urlparse` before storing:
-- `javascript:alert(1)` → 422 ✓
-- `ftp://example.com` → 422 ✓
-- `data:text/html,x` → 422 ✓
-- `file:///etc/passwd` → 422 ✓
+**PASS** — `normalize_url` whitelist check via `urlparse`: `javascript:`, `data:`, `ftp://`, `file://` all rejected. ✓
 
 ### AC-V2 — No-scheme input auto-prefixed with https://
 **PASS** — empty scheme → `https://` prepended. ✓
 
 ### AC-V3 — Double-prefix guard
-**PASS** — `urlparse("https://example.com")` → scheme in whitelist → no second prefix. ✓
+**PASS** — scheme already in whitelist → no second prefix. ✓
 
 ### AC-V4 — Empty URL rejected with 422
 **PASS** — blank/whitespace-only URL rejected before `normalize_url`. ✓
@@ -82,10 +77,10 @@ def redirect(slug: str):
 ## 2. Auto-slug Generation
 
 ### AC-S1 — 6-char slug, base62
-**FAIL** — see BLOCKER above. CHARS is base62 but stored slugs are mixed-case while lookups are lowercased. A slug containing any uppercase letter is unreachable.
+**FAIL** — see BLOCKER above. CHARS is base62 but the redirect/stats lookup lowercases first. Mixed-case auto-slugs are permanently unreachable.
 
 ### AC-S2 — 5 candidates on collision; 503 on exhaustion
-**PASS** — `for _ in range(5)` loop with fall-through to `HTTPException(503)`. ✓
+**PASS** — `for _ in range(5)` loop with fallthrough to `HTTPException(503)`. ✓
 
 ---
 
@@ -95,16 +90,17 @@ def redirect(slug: str):
 **PASS** — `slug = req.slug.strip().lower()` before validation and insert. ✓
 
 ### AC-S4 — Regex pattern
-**PASS** — `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$` matches spec; single-char allowed. ✓
+**PASS** — `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$` matches spec. ✓
 
 ### AC-S5 — Leading/trailing hyphens rejected
 **PASS** — covered by regex. ✓
 
 ### AC-S6 — Length 3–50 chars
-**PASS** — explicit length check before regex. ✓
+**PASS** — explicit length check before regex. ✓  
+*Note: AC-S4 says "single-character slugs are allowed" but AC-S6 sets min=3. These contradict; the code enforces min=3 which is the safer choice.*
 
 ### AC-S7 — Duplicate slug → 409
-**PASS** — `SELECT 1` before insert; `HTTPException(409)` on hit. ✓
+**PASS** — `SELECT 1` before insert; `HTTPException(409)` on collision. ✓
 
 ### AC-S8 — Reserved paths rejected
 **PASS** — `RESERVED` set checked after normalisation. ✓
@@ -117,8 +113,8 @@ def redirect(slug: str):
 **PASS** — `RedirectResponse(..., status_code=302)`. ✓
 
 ### AC-R2 — Click count increments on every visit
-**PASS (original bug fixed)** — `click_count+1` confirmed at line 137. ✓  
-*However, if slug is unreachable due to the BLOCKER above, the counter never fires.*
+**PASS (original bug fixed)** — `click_count+1` at line 137. ✓  
+*Moot for any auto-slug containing uppercase, since those links are unreachable due to the BLOCKER.*
 
 ### AC-R3 — Unknown slug returns HTML 404
 **PASS** — `HTMLResponse(_404_html(slug), ...)` not JSON. ✓
@@ -131,8 +127,8 @@ def redirect(slug: str):
 **PASS** — API returns `click_count`; frontend sets `clickCount` textContent. ✓
 
 ### AC-T2 — Manual refresh button
-**PASS** — `refreshStats()` calls `GET /api/links/{slug}/stats` on button click. ✓  
-**Minor:** no error feedback — network failure silently leaves count stale.
+**PASS** — `refreshStats()` calls `GET api/links/{slug}/stats` on button click. ✓  
+*Minor: no error feedback — network failure silently leaves count stale.*
 
 ### AC-T3 — No automatic polling
 **PASS** — no `setInterval`, no `setTimeout` loop. ✓
@@ -141,56 +137,51 @@ def redirect(slug: str):
 
 ## 6. Frontend UX
 **PASS**
+- Relative API paths: `fetch('api/links', ...)` and `fetch(\`api/links/${currentSlug}/stats\`)` — no leading slash. ✓
 - Inputs cleared after successful create. ✓
 - Error shown on failed create. ✓
 - Lookup panel independent and functional. ✓
 - XSS: `esc()` helper sanitises before `innerHTML`. ✓
 
-**Minor:** Result panel stays visible when a subsequent create fails — user sees stale short URL alongside the new error.
+*Minor: Result panel stays visible when a subsequent create fails — stale short URL shown alongside the new error.*
 
 ---
 
 ## Summary Table
 
-| AC | Area | Verdict |
-|----|------|---------|
-| V1 | Scheme whitelist | PASS |
-| V2 | No-scheme prefix | PASS |
-| V3 | Double-prefix guard | PASS |
-| V4 | Empty URL rejection | PASS |
-| S1 | Auto-slug 6-char base62 | **FAIL — uppercase case mismatch** |
-| S2 | Collision retry / 503 | PASS |
-| S3 | Slug lowercase | PASS |
-| S4 | Slug regex | PASS |
-| S5 | No leading/trailing hyphens | PASS |
-| S6 | Slug length 3–50 | PASS |
-| S7 | Duplicate → 409 | PASS |
-| S8 | Reserved paths | PASS |
-| R1 | 302 redirect | PASS |
-| R2 | Click count increment | PASS (original bug fixed) |
-| R3 | HTML 404 | PASS |
-| T1 | Inline click count | PASS |
-| T2 | Refresh button | PASS |
-| T3 | No polling | PASS |
+| AC | Area | Round 1 | Round 2 |
+|----|------|---------|---------|
+| V1 | Scheme whitelist | PASS | PASS |
+| V2 | No-scheme prefix | PASS | PASS |
+| V3 | Double-prefix guard | PASS | PASS |
+| V4 | Empty URL rejection | PASS | PASS |
+| S1 | Auto-slug 6-char base62 | **FAIL** | **FAIL — not fixed** |
+| S2 | Collision retry / 503 | PASS | PASS |
+| S3 | Slug lowercase | PASS | PASS |
+| S4 | Slug regex | PASS | PASS |
+| S5 | No leading/trailing hyphens | PASS | PASS |
+| S6 | Slug length 3–50 | PASS | PASS |
+| S7 | Duplicate → 409 | PASS | PASS |
+| S8 | Reserved paths | PASS | PASS |
+| R1 | 302 redirect | PASS | PASS |
+| R2 | Click count increment | PASS | PASS |
+| R3 | HTML 404 | PASS | PASS |
+| T1 | Inline click count | PASS | PASS |
+| T2 | Refresh button | PASS | PASS |
+| T3 | No polling | PASS | PASS |
 
 ---
 
 ## Blockers requiring engineering fix
 
-**B1 — Auto-slug uppercase roundtrip (AC-S1, AC-R2, AC-T2):**  
-`CHARS` includes uppercase but `redirect()` and `get_stats()` lowercase before lookup. Auto-generated slugs containing uppercase are permanently unreachable. ~66% of auto-slugs are affected on first generation.
-
-Fix in `gen_slug()`:
-```python
-def gen_slug() -> str:
-    return "".join(random.choices(CHARS, k=6)).lower()
-```
-Or restrict CHARS: `CHARS = string.ascii_lowercase + string.digits`
+**B1 — Auto-slug uppercase roundtrip (AC-S1):**  
+The engineer recorded a decision to revert CHARS to base36 but the code was not changed. `main.py:16` still declares base62 with uppercase. Auto-generated slugs containing uppercase are stored verbatim but looked up lowercase — guaranteed 404 on redirect and stats. Fix is a one-line change in `gen_slug()` or the `CHARS` declaration.
 
 ---
 
 ## Minor notes (not blocking)
 
-1. `refreshStats()` — no error feedback on fetch failure; count goes silently stale.
-2. Result panel stays visible on subsequent create failure — stale short URL alongside error.
-3. Concurrent auto-slug INSERT race — negligible probability at 6-char space; would surface as unhandled 500.
+1. `refreshStats()` — no error feedback on fetch failure; count silently goes stale.
+2. Result panel stays visible on subsequent create failure — stale URL alongside the error.
+3. AC-S4/AC-S6 spec contradiction: S4 says single-char slugs are allowed, S6 sets min=3. Code enforces min=3 which is the safer behaviour.
+4. Concurrent auto-slug INSERT race (negligible probability at 6-char space; unhandled 500 if it occurs).

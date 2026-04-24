@@ -2,33 +2,43 @@
 
 **Tester:** Mark  
 **Date:** 2026-04-24  
+**Round:** 2  
 **Verdict: FAIL — NOT APPROVED FOR RELEASE**
 
 ---
 
 ## Bug fix verification
 
-Issue #1 (click counter decrementing): **Fixed.** `click_count+1` confirmed at `engineering/main.py:137`.
+Issue #1 (click counter decrementing): **Fixed.** `click_count+1` confirmed at `engineering/main.py:137`. ✓
 
 ---
 
-## Blocker found during QA
+## Blocker — CHARS revert not applied
 
-**Auto-slug uppercase roundtrip failure.**
+The decision log records *"Reverted CHARS from base62 to base36"* but `main.py:16` still reads:
 
-The engineer changed `CHARS` to base62 to match AC-S1, but `gen_slug()` produces mixed-case slugs that are stored verbatim. Both `redirect()` and `get_stats()` lowercase the slug before DB lookup. Any auto-generated slug containing an uppercase letter is permanently unreachable — redirect returns 404, stats returns 404. Approximately 66% of auto-slugs are broken on creation.
+```python
+CHARS = string.ascii_lowercase + string.ascii_uppercase + string.digits  # base62
+```
 
-The original bug is fixed but this regression is introduced in the same change.
+The code was not changed. The auto-slug uppercase roundtrip failure from round 1 is still present. ~66% of auto-generated slugs will 404 on redirect and stats lookup.
 
 ---
 
 ## Required before re-approval
 
-Either:
-- Add `.lower()` to `gen_slug()` return value, **or**
-- Restrict `CHARS` to `string.ascii_lowercase + string.digits`
+Apply the one-line fix that was declared but not committed:
 
-Then re-run QA.
+```python
+# Option A — lowercase at generation time
+def gen_slug() -> str:
+    return "".join(random.choices(CHARS, k=6)).lower()
+
+# Option B — restrict CHARS to lowercase+digits
+CHARS = string.ascii_lowercase + string.digits
+```
+
+Then re-submit for QA round 3.
 
 ---
 
@@ -36,4 +46,5 @@ Then re-run QA.
 
 1. `refreshStats()` — no error feedback on fetch failure.
 2. Result panel stays visible on subsequent create failure.
-3. Concurrent auto-slug INSERT race — negligible probability.
+3. AC-S4/AC-S6 spec contradiction (single-char allowed vs min 3); code behaviour is correct, spec is inconsistent.
+4. Concurrent auto-slug INSERT race — negligible at this scale.
