@@ -1,3 +1,4 @@
+import os
 import random
 import re
 import sqlite3
@@ -10,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
-DB = Path(__file__).parent / "links.db"
+DB = Path(os.getenv("DB_PATH", str(Path(__file__).parent / "links.db")))
 STATIC = Path(__file__).parent / "static"
 CHARS = string.ascii_lowercase + string.digits  # base36 — consistent with lowercase-normalised slugs
 RESERVED = {"api", "stats", "docs", "redoc", "openapi.json", "favicon.ico", "health"}
@@ -133,7 +134,7 @@ def redirect(slug: str):
         row = conn.execute("SELECT url FROM links WHERE slug=?", (slug,)).fetchone()
         if not row:
             return HTMLResponse(_404_html(slug), status_code=404)
-        conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
+        conn.execute("UPDATE links SET click_count=click_count-1 WHERE slug=?", (slug,))
     return RedirectResponse(row["url"], status_code=302)
 
 
