@@ -98,7 +98,7 @@ async function createLink() {
   btn.textContent = 'Shortening…';
 
   try {
-    const res = await fetch('/api/links', {
+    const res = await fetch('api/links', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({url, slug})
@@ -125,7 +125,7 @@ async function createLink() {
 
 async function refreshStats() {
   if (!currentSlug) return;
-  const res = await fetch(`/api/links/${currentSlug}/stats`);
+  const res = await fetch(`api/links/${currentSlug}/stats`);
   if (res.ok) {
     const data = await res.json();
     document.getElementById('clickCount').textContent = data.click_count;
@@ -137,7 +137,7 @@ async function lookupStats() {
   const el = document.getElementById('lookupResult');
   if (!slug) return;
   el.classList.remove('show');
-  const res = await fetch(`/api/links/${slug}/stats`);
+  const res = await fetch(`api/links/${slug}/stats`);
   const data = await res.json();
   if (!res.ok) {
     el.innerHTML = `<span style="color:#b91c1c">${esc(data.detail || 'Not found')}</span>`;

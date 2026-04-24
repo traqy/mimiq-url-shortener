@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 DB = Path(os.getenv("DB_PATH", str(Path(__file__).parent / "links.db")))
 STATIC = Path(__file__).parent / "static"
-CHARS = string.ascii_lowercase + string.digits  # base36 — consistent with lowercase-normalised slugs
+CHARS = string.ascii_lowercase + string.ascii_uppercase + string.digits  # base62
 RESERVED = {"api", "stats", "docs", "redoc", "openapi.json", "favicon.ico", "health"}
 
 
