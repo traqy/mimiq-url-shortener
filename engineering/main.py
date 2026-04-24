@@ -134,7 +134,7 @@ def redirect(slug: str):
         row = conn.execute("SELECT url FROM links WHERE slug=?", (slug,)).fetchone()
         if not row:
             return HTMLResponse(_404_html(slug), status_code=404)
-        conn.execute("UPDATE links SET click_count=click_count-1 WHERE slug=?", (slug,))
+        conn.execute("UPDATE links SET click_count=click_count+1 WHERE slug=?", (slug,))
     return RedirectResponse(row["url"], status_code=302)
 
 
@@ -144,4 +144,4 @@ def _404_html(slug: str) -> str:
 height:100vh;margin:0;background:#f9fafb}}.box{{text-align:center}}
 h1{{font-size:5rem;margin:0;color:#1f2937}}p{{color:#6b7280}}a{{color:#6366f1}}</style></head>
 <body><div class=box><h1>404</h1><p>No link found for <code>/{slug}</code></p>
-<a href=/>\u2190 Create a short link</a></div></body></html>"""
+<a href=/>← Create a short link</a></div></body></html>"""
